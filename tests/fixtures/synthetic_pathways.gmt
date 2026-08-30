@@ -1,0 +1,5 @@
+R-HSA-1001	Lipid metabolism	GENE_A	GENE_B	GENE_C	GENE_E
+R-HSA-1002	Cholesterol biosynthesis	GENE_A	GENE_F	GENE_G
+R-HSA-1003	Platelet activation	GENE_D	GENE_E	GENE_F	GENE_H
+R-HSA-1004	Extracellular matrix	GENE_G	GENE_H	GENE_I	GENE_J
+R-HSA-1005	Inflammatory response	GENE_B	GENE_C	GENE_D
