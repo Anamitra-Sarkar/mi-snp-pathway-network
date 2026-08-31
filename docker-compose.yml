@@ -1,0 +1,32 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Release gate — fail-closed by default (safe). Backend returns 503 for /rankings until approved.
+      # To enable rankings, set MODEL_RELEASE_APPROVED=true and APPROVED_ARTIFACT_REVISION to a valid revision
+      # and mount artifacts (see volumes). See README.md and docs/architecture.md.
+      MODEL_RELEASE_APPROVED: "${MODEL_RELEASE_APPROVED:-false}"
+      APPROVED_ARTIFACT_REVISION: "${APPROVED_ARTIFACT_REVISION:-}"
+      ARTIFACT_DIR: "/app/artifacts"
+      # Auth — optional Firebase. Leave empty for dev (REQUIRE_AUTH=false allows unauthenticated).
+      FIREBASE_SERVICE_ACCOUNT_JSON: "${FIREBASE_SERVICE_ACCOUNT_JSON:-}"
+      REQUIRE_AUTH: "${REQUIRE_AUTH:-false}"
+    volumes:
+      # Mount local artifacts into container if present (optional — backend handles missing honestly)
+      - ./artifacts:/app/artifacts:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4); sys.exit(0 if r.status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+# To run:
+#   docker compose up --build
+# With released model:
+#   MODEL_RELEASE_APPROVED=true APPROVED_ARTIFACT_REVISION=v1 docker compose up --build
