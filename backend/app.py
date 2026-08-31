@@ -12,9 +12,10 @@ import glob
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+import re
+from fastapi import FastAPI, HTTPException, Depends, Query, Path as FPath
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from .auth import get_current_user
 
@@ -31,8 +32,33 @@ _feature_meta: dict = {}
 _evaluation: dict = {}
 
 
+GENE_SYMBOL_RE = re.compile(r"^[A-Za-z0-9._\-]+$")
+MAX_QUERY_LEN = 100
+MAX_SYMBOL_LEN = 50
+
+def _validate_gene_symbol(symbol: str):
+    if not symbol or not symbol.strip():
+        raise HTTPException(status_code=400, detail="gene symbol must not be empty")
+    s = symbol.strip()
+    if len(s) > MAX_SYMBOL_LEN:
+        raise HTTPException(status_code=400, detail=f"gene symbol too long (max {MAX_SYMBOL_LEN} chars)")
+    if not GENE_SYMBOL_RE.match(s):
+        raise HTTPException(status_code=400, detail="invalid gene symbol — allowed chars: A-Z a-z 0-9 . _ -")
+    return s
+
+def _validate_query(q: str | None):
+    if q is None:
+        return None
+    qs = q.strip()
+    if qs == "":
+        return None
+    if len(qs) > MAX_QUERY_LEN:
+        raise HTTPException(status_code=400, detail=f"query too long (max {MAX_QUERY_LEN} chars)")
+    return qs
+
+
 def is_release_approved():
-    approved = os.environ.get("MODEL_RELEASE_APPROVED", "false").lower() in ("true", "1", "yes")
+    approved = os.environ.get("MODEL_RELEASE_APPROVED", "false").lower().strip() in ("true", "1", "yes")
     revision = os.environ.get("APPROVED_ARTIFACT_REVISION", "").strip()
     return approved and len(revision) > 0, revision
 
@@ -147,59 +173,71 @@ def create_app():
 
     @app.get("/rankings")
     def rankings(
-        limit: int = Query(25, ge=1, le=500),
-        offset: int = Query(0, ge=0),
-        q: Optional[str] = None,
+        limit: int = Query(25, ge=1, le=500, description="page size"),
+        offset: int = Query(0, ge=0, description="page offset"),
+        q: Optional[str] = Query(None, max_length=MAX_QUERY_LEN, description="filter by gene symbol substring"),
         _ok=Depends(require_model),
         user=Depends(get_current_user),
     ):
+        qs = _validate_query(q)
         filtered = _rankings
-        if q:
-            ql = q.lower()
+        if qs is not None:
+            ql = qs.lower()
             filtered = [r for r in filtered if ql in r["gene"].lower()]
         total = len(filtered)
+        # clamp offset: if beyond total, return empty page (not 500)
+        if offset > total:
+            return {"total": total, "limit": limit, "offset": offset, "results": [], "revision": _model_revision}
         paged = filtered[offset: offset + limit]
         return {"total": total, "limit": limit, "offset": offset, "results": paged, "revision": _model_revision}
 
     @app.get("/genes/search")
-    def gene_search(q: str = Query(..., min_length=1), limit: int = Query(10, ge=1, le=50), _ok=Depends(require_model), user=Depends(get_current_user)):
-        ql = q.lower()
+    def gene_search(q: str = Query(..., min_length=1, max_length=MAX_QUERY_LEN), limit: int = Query(10, ge=1, le=50), _ok=Depends(require_model), user=Depends(get_current_user)):
+        qs = _validate_query(q)
+        if qs is None:
+            raise HTTPException(status_code=400, detail="query must not be empty")
+        ql = qs.lower()
         # Search over ranked genes (all genes in network)
         matches = [r for r in _rankings if ql in r["gene"].lower()]
         # prioritize prefix matches
         matches.sort(key=lambda r: (0 if r["gene"].lower().startswith(ql) else 1, r.get("rank", 999)))
-        return {"query": q, "results": matches[:limit]}
+        return {"query": qs, "results": matches[:limit]}
 
     @app.get("/genes/{symbol}")
-    def gene_detail(symbol: str, _ok=Depends(require_model), user=Depends(get_current_user)):
-        rec = _gene_index.get(symbol.upper()) or _gene_index.get(symbol)
+    def gene_detail(symbol: str = FPath(..., min_length=1, max_length=MAX_SYMBOL_LEN), _ok=Depends(require_model), user=Depends(get_current_user)):
+        sym = _validate_gene_symbol(symbol)
+        rec = _gene_index.get(sym.upper()) or _gene_index.get(sym)
         if not rec:
             # try case-insensitive
             for k, v in _gene_index.items():
-                if k.lower() == symbol.lower():
+                if k.lower() == sym.lower():
                     rec = v
                     break
         if not rec:
-            raise HTTPException(status_code=404, detail=f"gene {symbol} not found")
+            raise HTTPException(status_code=404, detail=f"gene {sym} not found")
         # Add explanation stub: shared pathways, neighbor seeds (if pathway data available)
-        explanation = _build_explanation(symbol, rec)
+        explanation = _build_explanation(sym, rec)
         return {**rec, "explanation": explanation}
 
     @app.get("/explain/{gene}")
-    def explain(gene: str, top_n: int = Query(5, ge=1, le=20), _ok=Depends(require_model), user=Depends(get_current_user)):
-        rec = _gene_index.get(gene.upper()) or _gene_index.get(gene)
+    def explain(gene: str = FPath(..., min_length=1, max_length=MAX_SYMBOL_LEN), top_n: int = Query(5, ge=1, le=20), _ok=Depends(require_model), user=Depends(get_current_user)):
+        sym = _validate_gene_symbol(gene)
+        rec = _gene_index.get(sym.upper()) or _gene_index.get(sym)
         if not rec:
             for k, v in _gene_index.items():
-                if k.lower() == gene.lower():
+                if k.lower() == sym.lower():
                     rec = v
                     break
         if not rec:
-            raise HTTPException(status_code=404, detail=f"gene {gene} not found")
-        explanation = _build_explanation(gene, rec, top_n=top_n)
-        return {"gene": gene, "ranking": rec, "explanation": explanation}
+            raise HTTPException(status_code=404, detail=f"gene {sym} not found")
+        explanation = _build_explanation(sym, rec, top_n=top_n)
+        return {"gene": sym, "ranking": rec, "explanation": explanation}
 
     @app.get("/evaluation")
     def evaluation(_ok=Depends(require_model), user=Depends(get_current_user)):
+        # Ensure we don't crash with 500 if evaluation missing — return honest empty
+        if not _evaluation:
+            return {"detail": "evaluation artifacts not deployed", "empty": True}
         return _evaluation
 
     return app

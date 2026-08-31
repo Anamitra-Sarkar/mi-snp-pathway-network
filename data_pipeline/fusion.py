@@ -70,7 +70,7 @@ def evaluate_metrics(y_true, y_score, ks=(10, 25, 50, 100)):
 
 
 def evaluate_loso(gene_list, adj, W, gene_to_pathways, seed_symbols, model_fn=train_logistic, ks=(10, 25, 50, 100)):
-    """
+    r"""
     Leave-One-Seed-Out: for each seed gene held out, train features based on remaining seeds,
     then rank held-out gene among all non-seed genes + held-out.
 

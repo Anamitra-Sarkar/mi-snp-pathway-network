@@ -19,9 +19,17 @@ def rwr(W, p0, restart_prob=0.3, tol=1e-6, max_iter=1000, verbose=False):
       n_iter: iterations
       converged: bool
     """
+    if not 0 <= restart_prob <= 1:
+        raise ValueError(f"restart_prob must be in [0,1], got {restart_prob}")
+    if tol <= 0:
+        raise ValueError(f"tol must be >0, got {tol}")
+    if max_iter <= 0:
+        raise ValueError(f"max_iter must be >0, got {max_iter}")
     n = W.shape[0]
-    assert W.shape[0] == W.shape[1], "W must be square"
-    assert len(p0) == n
+    if W.shape[0] != W.shape[1]:
+        raise ValueError(f"W must be square, got shape {W.shape}")
+    if len(p0) != n:
+        raise ValueError(f"p0 length {len(p0)} != W shape {n}")
     # normalize p0
     p0 = np.asarray(p0, dtype=float)
     s = p0.sum()
