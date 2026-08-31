@@ -121,6 +121,14 @@ export default function App() {
         </div>
       </header>
 
+      <div className="hero" aria-label="Hero illustration">
+        <img
+          src="/hero.png"
+          alt="Illustration of a human heart in deep crimson at the center with coral-red branching vascular and gene-network lines extending outward, dotted with red and peach nodes representing protein-protein and pathway interactions for myocardial infarction and coronary artery disease research"
+          className="hero-image"
+        />
+      </div>
+
       <main className="main">
         <HealthBanner health={health} />
 
