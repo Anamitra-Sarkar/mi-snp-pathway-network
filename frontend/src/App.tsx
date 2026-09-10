@@ -12,7 +12,7 @@ function HealthBanner({ health }: { health: Health | null }) {
   }
   return (
     <div className="banner warn" role="alert">
-      <strong>Model not yet released</strong> — rankings are unavailable or placeholder. {health.detail || 'Backend release gate is closed (MODEL_RELEASE_APPROVED != true).'} This UI abstains from showing clinical predictions until an approved model is loaded. Not for clinical use.
+      <strong>Rankings aren't available yet</strong> — our team is finishing validation before enabling live results. This tool is for research exploration only, not clinical use.
     </div>
   )
 }
@@ -108,28 +108,52 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="header">
-        <div className="header-inner">
-          <div>
-            <h1>MI / CAD Gene Prioritization</h1>
-            <p className="subtitle">SNP-gene-pathway network — RWR propagation from GWAS seeds over STRING PPI + Reactome/KEGG</p>
-          </div>
-          <div className="header-meta">
-            <span className="tag">Cardiovascular Genetics</span>
-            <span className="tag">GWAS Catalog · STRING · Reactome/KEGG</span>
-          </div>
+      <nav className="navbar">
+        <div className="brand">
+          <span className="brand-mark">MI</span>
+          <span className="brand-name">Cardiac Gene Insight</span>
         </div>
-      </header>
+      </nav>
 
-      <div className="hero" aria-label="Hero illustration">
-        <img
-          src="/hero.png"
-          alt="Illustration of a human heart in deep crimson at the center with coral-red branching vascular and gene-network lines extending outward, dotted with red and peach nodes representing protein-protein and pathway interactions for myocardial infarction and coronary artery disease research"
-          className="hero-image"
-        />
-      </div>
+      <section className="hero-section">
+        <div className="hero-copy">
+          <div className="eyebrow">Cardiovascular genetics</div>
+          <h1>
+            Trace heart disease risk <em>through</em> the gene network.
+          </h1>
+          <p className="lede">
+            Cardiac Gene Insight ranks candidate genes for heart attack and coronary artery disease risk by how
+            closely they connect to well-established risk genes — every ranking shows its reasoning, not just a score.
+          </p>
+          <a href="#workspace" className="btn primary">Explore rankings</a>
+        </div>
+        <figure className="hero-visual">
+          <img
+            src="/hero.png"
+            alt="Illustration of a human heart in deep crimson at the center with coral-red branching vascular and gene-network lines extending outward, dotted with red and peach nodes representing protein-protein and pathway interactions for myocardial infarction and coronary artery disease research"
+          />
+        </figure>
+      </section>
 
-      <main className="main">
+      <section className="feature-grid">
+        <div className="feature-card">
+          <span className="feature-index">01</span>
+          <h3>Grounded in established risk</h3>
+          <p>Well-studied cardiovascular risk genes anchor every search, keeping results tied to real biology.</p>
+        </div>
+        <div className="feature-card">
+          <span className="feature-index">02</span>
+          <h3>Explained, not just scored</h3>
+          <p>Select any gene to see the shared biological pathways connecting it to known risk genes.</p>
+        </div>
+        <div className="feature-card">
+          <span className="feature-index">03</span>
+          <h3>Built for exploration</h3>
+          <p>Search by gene symbol or known locus to quickly find and compare candidates.</p>
+        </div>
+      </section>
+
+      <main id="workspace" className="main">
         <HealthBanner health={health} />
 
         <section className="card">
@@ -154,18 +178,17 @@ export default function App() {
             </button>
           </form>
           <p className="hint" aria-live="polite">
-            Seeds: {seeds.slice(0, 8).map(s => s.symbol).join(', ')}{seeds.length > 8 ? ` +${seeds.length - 8} more` : ''} {seeds.length === 0 && health?.model_loaded ? '(loading…)' : seeds.length===0 ? '(model not loaded — seed list available via /seeds)' : ''}
+            Known risk genes: {seeds.slice(0, 8).map(s => s.symbol).join(', ')}{seeds.length > 8 ? ` +${seeds.length - 8} more` : ''}{seeds.length === 0 ? ' (loading…)' : ''}
           </p>
           {health?.model_loaded === false && (
-            <p className="hint"><button className="btn small" onClick={loadHealth}>Retry health check</button></p>
+            <p className="hint"><button className="btn small" onClick={loadHealth}>Check again</button></p>
           )}
         </section>
 
         {!health?.model_loaded ? (
           <section className="card abstain">
             <h3>Rankings unavailable</h3>
-            <p>The backend has not loaded an approved model artifact. This is the honest abstention state: no scores are fabricated. To enable rankings, deploy with <code>MODEL_RELEASE_APPROVED=true</code> and <code>APPROVED_ARTIFACT_REVISION</code> pointing at valid artifacts under <code>artifacts/</code> (see docs/architecture.md).</p>
-            <p className="hint">Data sources: GWAS Catalog (EFO_0000612 / EFO_0000378), STRING v12 combined_score≥700, Reactome/KEGG pathways.</p>
+            <p>Rankings aren't available yet. Our team is finishing validation on real cardiovascular genetics data before enabling live results.</p>
           </section>
         ) : (
           <>
@@ -248,7 +271,7 @@ export default function App() {
                     ) : (
                       <p className="muted">{typeof selected.explanation?.contributing_seeds === 'string' ? selected.explanation.contributing_seeds : 'No shared Reactome/KEGG pathway with current seed set (or pathway artifacts not deployed). Score driven by PPI proximity and topology.'}</p>
                     )}
-                    <p className="hint">Method: RWR restart=0.3 over column-normalized STRING PPI (score≥700). Fusion: logistic regression on [RWR, degree, pagerank, pathway overlap]. Evaluation: LOSO recall@k + AUPRC vs degree baseline.</p>
+                    <p className="hint">Scores combine network proximity to known risk genes with shared biological pathway evidence.</p>
                   </>
                 )}
               </section>
@@ -258,7 +281,7 @@ export default function App() {
 
         <section className="card seeds">
           <h3>Curated seed genes (GWAS Catalog EFO_0000612 / EFO_0000378 + literature)</h3>
-          <p className="muted">Well-replicated MI/CAD risk loci. Production source of truth is GWAS Catalog REST API; hardcoded list here is citable and documented in docs/data_sources.md.</p>
+          <p className="muted">Well-established heart disease and coronary artery disease risk genes from published genetic studies.</p>
           <div className="seed-grid">
             {(seeds.length ? seeds : [
               { symbol: 'CDKN2A/B (9p21.3)', locus: '9p21.3', trait: 'CAD/MI', citation: 'Helgadottir 2007', pmid: '17641190' },
@@ -272,7 +295,7 @@ export default function App() {
       </main>
 
       <footer className="footer">
-        <p>Research use only — not for clinical decision-making. Sources: GWAS Catalog https://www.ebi.ac.uk/gwas/, STRING https://stringdb-downloads.org/, Reactome https://reactome.org/download-data, KEGG https://rest.kegg.jp/. Metrics: recall@k, AUPRC vs degree baseline.</p>
+        <p>Research use only — not for clinical decision-making. Built on published genetic association studies and protein interaction data.</p>
       </footer>
     </div>
   )
