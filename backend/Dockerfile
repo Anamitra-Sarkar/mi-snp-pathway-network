@@ -36,6 +36,7 @@ COPY requirements.txt ./requirements.txt
 
 # Artifacts directory (may be mounted or empty — backend fail-closed handles missing)
 RUN mkdir -p /app/artifacts && chown appuser:appuser /app/artifacts
+RUN chmod +x backend/entrypoint.sh
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -51,4 +52,4 @@ USER appuser
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4); sys.exit(0 if r.status==200 else 1)"
 
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./backend/entrypoint.sh"]
